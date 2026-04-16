@@ -1,0 +1,21 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "d:\\esp32\\v5.5.1\\esp-idf",
+  "idf.toolsPathWin": "d:\\esp32\\.espressif",
+  "idf.pythonInstallPath": "d:\\esp32\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.openOcdConfigs": [
+    "board/esp32c5-builtin.cfg"
+  ],
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32c5"
+  },
+  "clangd.path": "d:\\esp32\\.espressif\\tools\\esp-clang\\esp-19.1.2_20250312\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=d:\\esp32\\.espressif\\tools\\riscv32-esp-elf\\esp-14.2.0_20241119\\riscv32-esp-elf\\bin\\riscv32-esp-elf-gcc.exe",
+    "--compile-commands-dir=D:\\1.1\\HKU-COMP3516\\Pre4Group_AIOT-main\\csi_send\\build"
+  ],
+  "idf.flashType": "UART",
+  "idf.portWin": "COM10",
+  "idf.currentSetup": "D:\\esp32\\v5.5.1\\esp-idf"
+}

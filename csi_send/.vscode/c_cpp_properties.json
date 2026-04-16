@@ -1,0 +1,23 @@
+{
+  "configurations": [
+    {
+      "name": "ESP-IDF",
+      "compilerPath": "${config:idf.toolsPathWin}\\tools\\riscv32-esp-elf\\esp-14.2.0_20241119\\riscv32-esp-elf\\bin\\riscv32-esp-elf-gcc.exe",
+      "compileCommands": "d:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_send/build\\compile_commands.json",
+      "includePath": [
+        "${config:idf.espIdfPath}/components/**",
+        "${config:idf.espIdfPathWin}/components/**",
+          "d:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_send/"
+      ],
+      "browse": {
+        "path": [
+          "${config:idf.espIdfPath}/components",
+          "${config:idf.espIdfPathWin}/components",
+          "d:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_send/"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  "version": 4
+}

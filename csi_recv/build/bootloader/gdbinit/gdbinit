@@ -1,0 +1,2 @@
+source D:/esp32c5/Pre4Group_AIOT-yuan/csi_recv/build/bootloader/gdbinit/symbols
+source D:/esp32c5/Pre4Group_AIOT-yuan/csi_recv/build/bootloader/gdbinit/connect
