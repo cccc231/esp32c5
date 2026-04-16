@@ -1,0 +1,59 @@
+{
+  "session_id": "P1_O1_T20260416_150941_D1_S1",
+  "output_dir": "D:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_recv\\capture_run_01\\m01",
+  "subject_dir_name": "m01",
+  "session_start_time": "2026-04-16T15:09:41",
+  "labels": {
+    "posture": {
+      "token": "P1",
+      "code": "1",
+      "value": "坐"
+    },
+    "orientation": {
+      "token": "O1",
+      "code": "1",
+      "value": "正对"
+    },
+    "time": {
+      "token": "T20260416_150941",
+      "value": "2026-04-16 15:09:41"
+    },
+    "distance": {
+      "token": "D1",
+      "code": "1",
+      "value": "1m"
+    },
+    "scene": {
+      "token": "S1",
+      "code": "1",
+      "value": "实验室"
+    },
+    "subject": {
+      "token": "m01",
+      "gender_code": "m",
+      "gender": "男",
+      "index": "01",
+      "value": "男1号受试者"
+    }
+  },
+  "session_end_time": "2026-04-16T15:10:14",
+  "duration_seconds": 33.364,
+  "stats": {
+    "raw_lines": 5514,
+    "espnow_lines": 1838,
+    "csi_meta_lines": 1838,
+    "csi_data_lines": 1837,
+    "bad_lines": 1,
+    "bad_csi_lines": 0,
+    "espnow_missing": 17,
+    "pred_count": 0
+  },
+  "files": {
+    "raw_log": "D:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_recv\\capture_run_01\\m01\\P1_O1_T20260416_150941_D1_S1_raw_serial.log",
+    "bad_log": "D:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_recv\\capture_run_01\\m01\\P1_O1_T20260416_150941_D1_S1_bad_lines.log",
+    "espnow_csv": "D:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_recv\\capture_run_01\\m01\\P1_O1_T20260416_150941_D1_S1_espnow_data.csv",
+    "csi_meta_csv": "D:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_recv\\capture_run_01\\m01\\P1_O1_T20260416_150941_D1_S1_csi_meta.csv",
+    "csi_data_csv": "D:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_recv\\capture_run_01\\m01\\P1_O1_T20260416_150941_D1_S1_csi_data.csv",
+    "training_data": "D:\\esp32c5\\Pre4Group_AIOT-yuan\\csi_recv\\capture_run_01\\m01\\P1_O1_T20260416_150941_D1_S1_training_data.txt"
+  }
+}
