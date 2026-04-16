@@ -31,6 +31,7 @@ void setup() {
 
 void loop() {
   long irValue = particleSensor.getIR();
+  bool fingerOnSensor = irValue >= 50000;
 
   if (checkForBeat(irValue) == true) {
     // Sensed a beat.
@@ -58,9 +59,18 @@ void loop() {
   // Serial.print(", Avg BPM=");
   // Serial.print(beatAvg);
 
-  if (irValue < 50000)
-    Serial.print(" Is your finger on the sensor?");
+  // 统一输出结构化原始心率信号，方便上位机作为 CSI 标签采集
+  // 字段：HR_RAW,毫秒时间戳,IR原始值,当前BPM,平均BPM,手指是否贴合
+  Serial.print("HR_RAW,");
+  Serial.print(millis());
+  Serial.print(",");
+  Serial.print(irValue);
+  Serial.print(",");
+  Serial.print(beatsPerMinute, 2);
+  Serial.print(",");
+  Serial.print(beatAvg);
+  Serial.print(",");
+  Serial.println(fingerOnSensor ? 1 : 0);
 
-  Serial.println(beatAvg);
   delay(40); // Roughly match CSI sample rate.
 }

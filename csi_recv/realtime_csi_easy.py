@@ -5,13 +5,14 @@
 实时 CSI 存储 + 训练采集 / 推理脚本（精简保存版）
 
 采集：
-  python .\realtime_csi_easy.py -p COM7 -b 921600 -o .\capture_run_01 --collect-training-data
+  python .\realtime_csi_easy.py -p COM7 -b 921600 -o .\capture_run_02 --collect-training-data --hr-port COM5 --hr-baud 9600
 
 推理：
   python .\realtime_csi_easy.py -p COM7 -b 921600 -o .\capture_run_01 --model-path .\csi_hr.keras
 
 说明：
 - 训练采集模式：仅保存原始 CSI_DATA 到 csi_data.csv，并保存 session_labels.json
+- 若提供 --hr-port：同时保存来自 arduino_hr.ino 的 HR_RAW 原始心率波形到 hr_data.csv
 - 推理模式：保存原始 CSI_DATA，同时加载模型做实时推理
 - 不再保存 raw_serial.log / bad_lines.log / espnow_data.csv / csi_meta.csv / training_data.txt
 """
@@ -24,6 +25,7 @@ import csv
 import json
 import os
 import re
+import threading
 import time
 from collections import deque
 from datetime import datetime
@@ -48,6 +50,20 @@ CSI_DATA_HEADER = [
     "data",
     "host_rx_us",
     "host_rx_iso",
+]
+
+HR_DATA_HEADER = [
+    "hr_device_ms",
+    "ir_raw",
+    "bpm",
+    "beat_avg",
+    "finger_on",
+    "raw_line",
+    "host_rx_us",
+    "host_rx_iso",
+    "aligned_csi_pkt_count",
+    "aligned_csi_host_rx_us",
+    "aligned_delta_us",
 ]
 
 LABEL_OPTIONS = {
@@ -101,6 +117,9 @@ class Stats:
         self.bad_lines = 0
         self.bad_csi_lines = 0
         self.pred_count = 0
+        self.hr_data_lines = 0
+        self.bad_hr_lines = 0
+        self.hr_aligned_lines = 0
         self.last_print_time = time.time()
         self.last_csi_count = 0
 
@@ -116,8 +135,10 @@ class Stats:
         print(
             f"[{datetime.now().strftime('%H:%M:%S')}] "
             f"saved_csi={self.csi_data_lines} ({csi_rate:.2f}/s), "
+            f"saved_hr={self.hr_data_lines}, "
+            f"hr_aligned={self.hr_aligned_lines}, "
             f"pred={self.pred_count}, "
-            f"bad={self.bad_lines}, bad_csi={self.bad_csi_lines}"
+            f"bad={self.bad_lines}, bad_csi={self.bad_csi_lines}, bad_hr={self.bad_hr_lines}"
         )
 
         self.last_print_time = now
@@ -311,10 +332,29 @@ def build_stats_summary(stats: "Stats") -> dict[str, int]:
     return {
         "raw_lines": stats.raw_lines,
         "csi_data_lines": stats.csi_data_lines,
+        "hr_data_lines": stats.hr_data_lines,
         "bad_lines": stats.bad_lines,
         "bad_csi_lines": stats.bad_csi_lines,
+        "bad_hr_lines": stats.bad_hr_lines,
+        "hr_aligned_lines": stats.hr_aligned_lines,
         "pred_count": stats.pred_count,
     }
+
+
+class AlignmentState:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._latest_pkt_count: Optional[str] = None
+        self._latest_host_rx_us: Optional[int] = None
+
+    def update_from_csi(self, pkt_count: str, host_rx_us: int) -> None:
+        with self._lock:
+            self._latest_pkt_count = pkt_count
+            self._latest_host_rx_us = host_rx_us
+
+    def snapshot(self) -> tuple[Optional[str], Optional[int]]:
+        with self._lock:
+            return self._latest_pkt_count, self._latest_host_rx_us
 
 
 def parse_csi_data_line(line: str) -> list[str]:
@@ -340,6 +380,75 @@ def parse_csi_data_line(line: str) -> list[str]:
 
     _ = [int(x) for x in data_list]
     return row
+
+
+def parse_hr_data_line(line: str) -> list[str]:
+    """
+    兼容两种心率串口格式：
+    1) 推荐格式（arduino_hr.ino）：HR_RAW,device_ms,ir_raw,bpm,beat_avg,finger_on
+    2) 旧格式：仅输出数字 beatAvg，此时其余字段留空
+    """
+    if line.startswith("HR_RAW,"):
+        row = next(csv.reader(StringIO(line)))
+        if len(row) != 6:
+            raise ValueError(f"HR_RAW field count mismatch: {len(row)}")
+        int(row[1])      # device_ms
+        int(row[2])      # ir_raw
+        float(row[3])    # bpm
+        int(row[4])      # beat_avg
+        int(row[5])      # finger_on
+        return row[1:]
+
+    if re.fullmatch(r"-?\d+", line):
+        return ["", "", "", line, "", line]
+
+    raise ValueError("Unknown HR serial format")
+
+
+def hr_reader_loop(
+    hr_ser: serial.Serial,
+    hr_writer: csv.writer,
+    hr_file,
+    stats: "Stats",
+    stop_event: threading.Event,
+    alignment_state: "AlignmentState",
+) -> None:
+    while not stop_event.is_set():
+        try:
+            raw = hr_ser.readline()
+            if not raw:
+                continue
+
+            host_rx_us = time.time_ns() // 1000
+            host_rx_iso = datetime.now().isoformat(timespec="milliseconds")
+            line = raw.decode("utf-8", errors="replace").strip()
+            if not line:
+                continue
+
+            parsed = parse_hr_data_line(line)
+            aligned_pkt_count, aligned_csi_host_rx_us = alignment_state.snapshot()
+            aligned_delta_us = ""
+            if aligned_csi_host_rx_us is not None:
+                aligned_delta_us = str(host_rx_us - aligned_csi_host_rx_us)
+                stats.hr_aligned_lines += 1
+
+            hr_writer.writerow(
+                parsed
+                + [
+                    line,
+                    str(host_rx_us),
+                    host_rx_iso,
+                    "" if aligned_pkt_count is None else str(aligned_pkt_count),
+                    ""
+                    if aligned_csi_host_rx_us is None
+                    else str(aligned_csi_host_rx_us),
+                    aligned_delta_us,
+                ]
+            )
+            hr_file.flush()
+            stats.hr_data_lines += 1
+        except Exception:
+            stats.bad_hr_lines += 1
 
 
 def parse_csi_amplitudes(csi_data_str: str) -> np.ndarray:
@@ -446,6 +555,9 @@ def main() -> None:
     parser.add_argument("-o", "--output-dir", default="./csi_capture")
     parser.add_argument("--stats-interval", type=float, default=2.0)
     parser.add_argument("--timeout", type=float, default=1.0)
+    parser.add_argument("--hr-port", help="心率串口（如 COM5 或 /dev/ttyUSB1）")
+    parser.add_argument("--hr-baud", type=int, default=9600, help="心率串口波特率")
+    parser.add_argument("--hr-timeout", type=float, default=0.2, help="心率串口读取超时")
 
     parser.add_argument("--collect-training-data", action="store_true")
     parser.add_argument("--disable-session-labeling", action="store_true")
@@ -505,6 +617,9 @@ def main() -> None:
         output_dir, build_tagged_filename(session_id, "csi_data.csv")
     )
     csi_f, csi_writer = open_csv_with_header(csi_csv_path, CSI_DATA_HEADER)
+    hr_f = None
+    hr_writer = None
+    hr_csv_path: Optional[str] = None
 
     model = None
     if args.collect_training_data:
@@ -516,6 +631,7 @@ def main() -> None:
         print(f"Inference mode ON -> loaded model: {args.model_path}")
 
     stats = Stats()
+    alignment_state = AlignmentState()
     shaped_window: deque[np.ndarray] = deque(maxlen=args.window_size)
 
     print(f"Opening serial port: {args.port} @ {args.baud}")
@@ -533,6 +649,34 @@ def main() -> None:
     print(f"csi       -> {csi_csv_path}")
     if session_meta_path is not None:
         print(f"labels    -> {session_meta_path}")
+    if args.hr_port:
+        hr_csv_path = os.path.join(
+            output_dir, build_tagged_filename(session_id, "hr_data.csv")
+        )
+        hr_f, hr_writer = open_csv_with_header(hr_csv_path, HR_DATA_HEADER)
+        print(f"hr        -> {hr_csv_path}")
+        print(f"Opening HR serial port: {args.hr_port} @ {args.hr_baud}")
+
+    hr_ser: Optional[serial.Serial] = None
+    hr_thread: Optional[threading.Thread] = None
+    hr_stop_event = threading.Event()
+    if args.hr_port and hr_writer is not None and hr_f is not None:
+        hr_ser = serial.Serial(
+            port=args.hr_port,
+            baudrate=args.hr_baud,
+            bytesize=8,
+            parity="N",
+            stopbits=1,
+            timeout=args.hr_timeout,
+        )
+        hr_thread = threading.Thread(
+            target=hr_reader_loop,
+            args=(hr_ser, hr_writer, hr_f, stats, hr_stop_event),
+            kwargs={"alignment_state": alignment_state},
+            daemon=True,
+        )
+        hr_thread.start()
+        print("HR serial logging thread started.")
 
     try:
         while True:
@@ -565,6 +709,7 @@ def main() -> None:
                 csi_writer.writerow(row + [str(host_rx_us), host_rx_iso])
                 csi_f.flush()
                 stats.csi_data_lines += 1
+                alignment_state.update_from_csi(row[1], host_rx_us)
 
                 if not args.collect_training_data:
                     amplitudes = parse_csi_amplitudes(row[9])
@@ -606,6 +751,13 @@ def main() -> None:
     finally:
         ser.close()
         csi_f.close()
+        if hr_thread is not None:
+            hr_stop_event.set()
+            hr_thread.join(timeout=2.0)
+        if hr_ser is not None and hr_ser.is_open:
+            hr_ser.close()
+        if hr_f is not None:
+            hr_f.close()
 
         if (
             session_metadata is not None
@@ -623,6 +775,8 @@ def main() -> None:
             session_metadata["files"] = {
                 "csi_data_csv": os.path.abspath(csi_csv_path),
             }
+            if hr_csv_path is not None:
+                session_metadata["files"]["hr_data_csv"] = os.path.abspath(hr_csv_path)
             write_session_metadata(session_meta_path, session_metadata)
 
 
